@@ -1,0 +1,32 @@
+# Build output
+terraform-provider-harbour
+
+# Go
+go.sum
+go.work
+go.work.sum
+.env
+vendor/
+*.test
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Docs generation
+website/
+
+# OS
+.DS_Store
