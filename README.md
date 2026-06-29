@@ -44,7 +44,8 @@ make tf-apply     # AWS_PROFILE=<your-profile> by default
 
 ```hcl
 provider "harbour" {
-  endpoint = "https://api.harbour.example"   # Harbour API endpoint (PHZ, resolvable from within VPC)
+  endpoint = "https://api.harbour.example"   # PHZ — resolvable from within the customer VPC only
+  # endpoint = "https://<id>.execute-api.eu-west-1.amazonaws.com"  # raw URL for CI outside the VPC
   region   = "eu-west-1"                      # AWS region (or set AWS_REGION)
   role_arn = "arn:aws:iam::ACCOUNT_ID:role/harbour-customer-prod"
 }
