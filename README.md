@@ -27,13 +27,16 @@ terraform {
 }
 ```
 
-### Local build
+### Local build (dev_overrides)
+
+The provider is not yet published to the registry. For local development, `dev_overrides` in a `.terraformrc` file points Terraform at the compiled binary directly — no registry lookup, no `terraform init` required for the provider.
 
 ```bash
-make install
+make build        # compile binary to repo root
+cd dev
+make setup        # generate dev/.terraformrc with correct local path (gitignored)
+make tf-apply     # AWS_PROFILE=<your-profile> by default
 ```
-
-This compiles the binary and places it in `~/.terraform.d/plugins/registry.terraform.io/novec-tech-io/harbour/0.1.0/{os}_{arch}/`. No `.terraformrc` override needed when using this path.
 
 ---
 
@@ -41,7 +44,7 @@ This compiles the binary and places it in `~/.terraform.d/plugins/registry.terra
 
 ```hcl
 provider "harbour" {
-  endpoint = "https://api.harbour.example"   # your Harbour API endpoint
+  endpoint = "https://api.harbour.example"   # Harbour API endpoint (PHZ, resolvable from within VPC)
   region   = "eu-west-1"                      # AWS region (or set AWS_REGION)
   role_arn = "arn:aws:iam::ACCOUNT_ID:role/harbour-customer-prod"
 }
@@ -109,5 +112,7 @@ make lint     # golangci-lint
 ## How it works
 
 The provider signs all requests with AWS SigV4 (`execute-api` service) using the configured credentials. Certificate issuance is asynchronous — `terraform apply` polls every 5 seconds (up to 5 minutes) until the certificate reaches `issued` status or fails.
+
+`terraform destroy` calls `POST /certificates/revoke`. A 404 or 409 response (cert already gone or already revoked) is treated as success — destroy is idempotent.
 
 The underlying API is the Harbour HTTP API Gateway, which requires the caller to hold `execute-api:Invoke` on the API resource via IAM.

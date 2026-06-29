@@ -38,6 +38,12 @@ type NotFoundError struct {
 
 func (e *NotFoundError) Error() string { return e.Message }
 
+type ConflictError struct {
+	Message string
+}
+
+func (e *ConflictError) Error() string { return e.Message }
+
 type IssueCertRequest struct {
 	CommonName string   `json:"common_name"`
 	TTL        string   `json:"ttl,omitempty"`
@@ -154,6 +160,9 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 
 	if resp.StatusCode == http.StatusNotFound {
 		return &NotFoundError{Message: fmt.Sprintf("not found: %s", string(respBytes))}
+	}
+	if resp.StatusCode == http.StatusConflict {
+		return &ConflictError{Message: fmt.Sprintf("conflict: %s", string(respBytes))}
 	}
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("harbour API returned %d: %s", resp.StatusCode, string(respBytes))

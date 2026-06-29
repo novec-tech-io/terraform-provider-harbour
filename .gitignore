@@ -15,6 +15,7 @@ vendor/
 *.dylib
 
 # Terraform
+dev/.terraformrc
 **/.terraform/
 **/.terraform.lock.hcl
 *.tfstate

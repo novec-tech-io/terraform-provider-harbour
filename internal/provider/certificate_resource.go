@@ -194,7 +194,8 @@ func (r *CertificateResource) Delete(ctx context.Context, req resource.DeleteReq
 	err := r.client.RevokeCertificate(ctx, RevokeRequest{RequestID: data.RequestID.ValueString()})
 	if err != nil {
 		var nfe *NotFoundError
-		if errors.As(err, &nfe) {
+		var ce *ConflictError
+		if errors.As(err, &nfe) || errors.As(err, &ce) {
 			return
 		}
 		resp.Diagnostics.AddError("Failed to revoke certificate", err.Error())
