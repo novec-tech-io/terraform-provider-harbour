@@ -41,6 +41,7 @@ func (p *HarbourProvider) Metadata(_ context.Context, _ provider.MetadataRequest
 
 func (p *HarbourProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Description: "The Harbour provider issues and manages certificates in a Harbour private PKI deployment. It authenticates to the Harbour API using AWS SigV4 (execute-api).",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
 				Required:    true,
@@ -113,5 +114,7 @@ func (p *HarbourProvider) Resources(_ context.Context) []func() resource.Resourc
 }
 
 func (p *HarbourProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return nil
+	return []func() datasource.DataSource{
+		NewCertificateDataSource,
+	}
 }

@@ -5,7 +5,7 @@ PLUGIN_DIR := ~/.terraform.d/plugins/registry.terraform.io/novec-tech-io/harbour
 default: build
 
 build:
-	go build -o terraform-provider-harbour .
+	go build -ldflags "-X main.version=$(VERSION)" -o terraform-provider-harbour .
 
 install: build
 	mkdir -p $(PLUGIN_DIR)
@@ -17,4 +17,7 @@ test:
 lint:
 	golangci-lint run ./...
 
-.PHONY: build install test lint
+docs:
+	go generate ./...
+
+.PHONY: build install test lint docs

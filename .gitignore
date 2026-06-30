@@ -2,7 +2,6 @@
 terraform-provider-harbour
 
 # Go
-go.sum
 go.work
 go.work.sum
 .env

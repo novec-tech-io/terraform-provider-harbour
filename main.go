@@ -1,3 +1,5 @@
+//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name harbour
+
 package main
 
 import (
@@ -6,7 +8,7 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/novec/terraform-provider-harbour/internal/provider"
+	"github.com/novec-tech-io/terraform-provider-harbour/internal/provider"
 )
 
 var version string = "dev"
