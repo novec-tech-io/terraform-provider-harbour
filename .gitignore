@@ -16,6 +16,7 @@ vendor/
 # Internal dev config
 dev/
 CLAUDE.md
+.claude/
 
 # Terraform
 **/.terraform/
