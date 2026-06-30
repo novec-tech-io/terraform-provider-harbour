@@ -17,14 +17,15 @@ type CertificateDataSource struct {
 }
 
 type CertificateDataSourceModel struct {
-	ID              types.String `tfsdk:"id"`
-	RequestID       types.String `tfsdk:"request_id"`
-	CommonName      types.String `tfsdk:"common_name"`
-	TTL             types.String `tfsdk:"ttl"`
-	SerialNumber    types.String `tfsdk:"serial_number"`
-	SecretARN       types.String `tfsdk:"secret_arn"`
-	ExpiryTimestamp types.Int64  `tfsdk:"expiry_timestamp"`
-	Status          types.String `tfsdk:"status"`
+	ID                types.String `tfsdk:"id"`
+	RequestID         types.String `tfsdk:"request_id"`
+	CommonName        types.String `tfsdk:"common_name"`
+	TTL               types.String `tfsdk:"ttl"`
+	SerialNumber      types.String `tfsdk:"serial_number"`
+	SecretARN         types.String `tfsdk:"secret_arn"`
+	ExpiryTimestamp   types.Int64  `tfsdk:"expiry_timestamp"`
+	Status            types.String `tfsdk:"status"`
+	ACMCertificateARN types.String `tfsdk:"acm_certificate_arn"`
 }
 
 func NewCertificateDataSource() datasource.DataSource {
@@ -68,6 +69,10 @@ func (d *CertificateDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"status": schema.StringAttribute{
 				Computed:    true,
 				Description: "Current certificate status (requested, issuing, issued, revoked, expired, failed).",
+			},
+			"acm_certificate_arn": schema.StringAttribute{
+				Computed:    true,
+				Description: "ARN of the certificate imported into ACM in the customer account. Null unless the certificate was issued with import_to_acm.",
 			},
 		},
 	}
@@ -114,6 +119,11 @@ func (d *CertificateDataSource) Read(ctx context.Context, req datasource.ReadReq
 	data.SecretARN = types.StringValue(record.SecretARN)
 	data.ExpiryTimestamp = types.Int64Value(record.ExpiryTimestamp)
 	data.Status = types.StringValue(record.Status)
+	if record.ACMCertificateARN != "" {
+		data.ACMCertificateARN = types.StringValue(record.ACMCertificateARN)
+	} else {
+		data.ACMCertificateARN = types.StringNull()
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

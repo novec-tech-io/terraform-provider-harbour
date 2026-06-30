@@ -45,9 +45,10 @@ type ConflictError struct {
 func (e *ConflictError) Error() string { return e.Message }
 
 type IssueCertRequest struct {
-	CommonName string   `json:"common_name"`
-	TTL        string   `json:"ttl,omitempty"`
-	AltNames   []string `json:"alt_names,omitempty"`
+	CommonName  string   `json:"common_name"`
+	TTL         string   `json:"ttl,omitempty"`
+	AltNames    []string `json:"alt_names,omitempty"`
+	ImportToACM bool     `json:"import_to_acm,omitempty"`
 }
 
 type IssueCertResponse struct {
@@ -56,13 +57,14 @@ type IssueCertResponse struct {
 }
 
 type CertificateRecord struct {
-	RequestID       string `json:"request_id"`
-	CN              string `json:"cn"`
-	Status          string `json:"status"`
-	TTL             string `json:"ttl"`
-	SerialNumber    string `json:"serial_number"`
-	SecretARN       string `json:"secret_arn"`
-	ExpiryTimestamp int64  `json:"expiry_timestamp"`
+	RequestID         string `json:"request_id"`
+	CN                string `json:"cn"`
+	Status            string `json:"status"`
+	TTL               string `json:"ttl"`
+	SerialNumber      string `json:"serial_number"`
+	SecretARN         string `json:"secret_arn"`
+	ExpiryTimestamp   int64  `json:"expiry_timestamp"`
+	ACMCertificateARN string `json:"acm_certificate_arn,omitempty"`
 }
 
 type RevokeRequest struct {

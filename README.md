@@ -92,6 +92,7 @@ resource "harbour_certificate" "api" {
 | `common_name` | Yes | Certificate CN |
 | `ttl` | No | Certificate TTL, e.g. `90d`, `8760h`. Defaults to the tenant `default_cert_ttl` |
 | `alt_names` | No | List of subject alternative names (SANs) |
+| `import_to_acm` | No | Import the issued certificate into ACM in your AWS account. Requires ACM import to be configured for your tenant (see [ACM import](#acm-import) below). Defaults to `false` |
 
 #### Attributes
 
@@ -103,6 +104,7 @@ resource "harbour_certificate" "api" {
 | `secret_arn` | Secrets Manager ARN containing the certificate material |
 | `expiry_timestamp` | Certificate expiry as a Unix timestamp |
 | `status` | Current status: `requested`, `issuing`, `issued`, `revoked`, `expired`, `failed` |
+| `acm_certificate_arn` | ARN of the certificate imported into ACM in your account. Only set when `import_to_acm` is `true` |
 
 ---
 
@@ -129,6 +131,29 @@ output "secret_arn" {
 | `request_id` | Yes | Harbour request ID of the certificate to read |
 
 Returns the same attributes as the `harbour_certificate` resource.
+
+---
+
+## ACM import
+
+Setting `import_to_acm = true` imports the issued certificate into ACM in your AWS account, exposing a usable `acm_certificate_arn` you can wire directly into AWS resources:
+
+```hcl
+resource "harbour_certificate" "api" {
+  common_name   = "api.example.internal"
+  ttl           = "90d"
+  import_to_acm = true
+}
+
+resource "aws_lb_listener" "https" {
+  certificate_arn = harbour_certificate.api.acm_certificate_arn
+  # ...
+}
+```
+
+This requires a one-time setup in your AWS account: an IAM role trusting Harbour's certificate-issuance Lambda, granting `acm:ImportCertificate`, `acm:AddTagsToCertificate`, and `acm:DeleteCertificate`. Without this role configured for your tenant, `import_to_acm = true` fails with "ACM import is not configured for this tenant". Contact Novec to enable it.
+
+On renewal, the certificate is re-imported onto the same ACM ARN, so listeners and other references never need to change. **Revocation does not currently delete the ACM certificate** — only the underlying Harbour record is revoked; removing the cert from ACM is on the roadmap.
 
 ---
 

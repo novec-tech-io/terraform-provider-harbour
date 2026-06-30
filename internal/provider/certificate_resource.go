@@ -7,6 +7,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -21,15 +23,17 @@ type CertificateResource struct {
 }
 
 type CertificateResourceModel struct {
-	ID              types.String `tfsdk:"id"`
-	CommonName      types.String `tfsdk:"common_name"`
-	TTL             types.String `tfsdk:"ttl"`
-	AltNames        types.List   `tfsdk:"alt_names"`
-	RequestID       types.String `tfsdk:"request_id"`
-	SerialNumber    types.String `tfsdk:"serial_number"`
-	SecretARN       types.String `tfsdk:"secret_arn"`
-	ExpiryTimestamp types.Int64  `tfsdk:"expiry_timestamp"`
-	Status          types.String `tfsdk:"status"`
+	ID                types.String `tfsdk:"id"`
+	CommonName        types.String `tfsdk:"common_name"`
+	TTL               types.String `tfsdk:"ttl"`
+	AltNames          types.List   `tfsdk:"alt_names"`
+	ImportToACM       types.Bool   `tfsdk:"import_to_acm"`
+	RequestID         types.String `tfsdk:"request_id"`
+	SerialNumber      types.String `tfsdk:"serial_number"`
+	SecretARN         types.String `tfsdk:"secret_arn"`
+	ExpiryTimestamp   types.Int64  `tfsdk:"expiry_timestamp"`
+	Status            types.String `tfsdk:"status"`
+	ACMCertificateARN types.String `tfsdk:"acm_certificate_arn"`
 }
 
 func NewCertificateResource() resource.Resource {
@@ -72,6 +76,15 @@ func (r *CertificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 					listplanmodifier.RequiresReplace(),
 				},
 			},
+			"import_to_acm": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Import the issued certificate into ACM in the customer account via the tenant's configured cross-account role. Requires ACM import to be configured for this tenant (see harbour-acm-import IAM role).",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
+			},
 			"request_id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -102,6 +115,13 @@ func (r *CertificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Computed:    true,
 				Description: "Current certificate status (requested, issuing, issued, revoked, expired, failed).",
 			},
+			"acm_certificate_arn": schema.StringAttribute{
+				Computed:    true,
+				Description: "ARN of the certificate imported into ACM in the customer account. Only set when import_to_acm is true. Usable directly as certificate_arn on AWS resources such as aws_lb_listener.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 	}
 }
@@ -129,8 +149,9 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	issueReq := IssueCertRequest{
-		CommonName: data.CommonName.ValueString(),
-		TTL:        data.TTL.ValueString(),
+		CommonName:  data.CommonName.ValueString(),
+		TTL:         data.TTL.ValueString(),
+		ImportToACM: data.ImportToACM.ValueBool(),
 	}
 
 	if !data.AltNames.IsNull() && !data.AltNames.IsUnknown() {
@@ -209,4 +230,9 @@ func (r *CertificateResource) recordToModel(record *CertificateRecord, data *Cer
 	data.SecretARN = types.StringValue(record.SecretARN)
 	data.ExpiryTimestamp = types.Int64Value(record.ExpiryTimestamp)
 	data.Status = types.StringValue(record.Status)
+	if record.ACMCertificateARN != "" {
+		data.ACMCertificateARN = types.StringValue(record.ACMCertificateARN)
+	} else {
+		data.ACMCertificateARN = types.StringNull()
+	}
 }

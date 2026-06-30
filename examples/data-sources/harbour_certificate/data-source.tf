@@ -11,3 +11,8 @@ output "expiry_timestamp" {
   description = "Unix timestamp of certificate expiry"
   value       = data.harbour_certificate.example.expiry_timestamp
 }
+
+output "acm_certificate_arn" {
+  description = "ACM certificate ARN, if the certificate was issued with import_to_acm"
+  value       = data.harbour_certificate.example.acm_certificate_arn
+}
