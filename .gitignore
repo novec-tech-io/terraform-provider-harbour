@@ -13,8 +13,11 @@ vendor/
 *.so
 *.dylib
 
+# Internal dev config
+dev/
+CLAUDE.md
+
 # Terraform
-dev/.terraformrc
 **/.terraform/
 **/.terraform.lock.hcl
 *.tfstate
