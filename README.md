@@ -18,7 +18,7 @@ terraform {
   required_providers {
     harbour = {
       source  = "novec-tech-io/harbour"
-      version = "~> 0.1"
+      version = "~> 0.2"
     }
   }
 }
