@@ -18,7 +18,7 @@ terraform {
   required_providers {
     harbour = {
       source  = "novec-tech-io/harbour"
-      version = "~> 0.2"
+      version = "~> 0.3"
     }
   }
 }
@@ -92,7 +92,8 @@ resource "harbour_certificate" "api" {
 | `common_name` | Yes | Certificate CN |
 | `ttl` | No | Certificate TTL, e.g. `90d`, `8760h`. Defaults to the tenant `default_cert_ttl` |
 | `alt_names` | No | List of subject alternative names (SANs) |
-| `import_to_acm` | No | Import the issued certificate into ACM in your AWS account. Requires ACM import to be configured for your tenant (see [ACM import](#acm-import) below). Defaults to `false` |
+| `import_to_acm` | No | Import the issued certificate into ACM in your AWS account. Requires ACM import to be configured for your tenant (see [ACM import](#acm-import) below). Defaults to `false`. Conflicts with `csr` |
+| `csr` | No | PEM-encoded Certificate Signing Request — Harbour signs your public key instead of generating a private key server-side (see [CSR support](#csr-support) below). Conflicts with `import_to_acm` and `alt_names` |
 
 #### Attributes
 
@@ -151,9 +152,30 @@ resource "aws_lb_listener" "https" {
 }
 ```
 
-This requires a one-time setup in your AWS account: an IAM role trusting Harbour's certificate-issuance Lambda, granting `acm:ImportCertificate`, `acm:AddTagsToCertificate`, and `acm:DeleteCertificate`. Without this role configured for your tenant, `import_to_acm = true` fails with "ACM import is not configured for this tenant". Contact Novec to enable it.
+This requires a one-time setup in your AWS account: an IAM role trusting Harbour's certificate-issuance **and** revocation Lambdas, granting `acm:ImportCertificate`, `acm:AddTagsToCertificate`, and `acm:DeleteCertificate`. Without this role configured for your tenant, `import_to_acm = true` fails with "ACM import is not configured for this tenant". Contact Novec to enable it.
 
-On renewal, the certificate is re-imported onto the same ACM ARN, so listeners and other references never need to change. **Revocation does not currently delete the ACM certificate** — only the underlying Harbour record is revoked; removing the cert from ACM is on the roadmap.
+On renewal, the certificate is re-imported onto the same ACM ARN, so listeners and other references never need to change. On revocation (including `terraform destroy`), Harbour also deletes the certificate from your ACM — best-effort: if the ACM certificate is still attached to a resource (e.g. a load balancer listener you haven't updated yet), the Harbour-side revoke still succeeds and the ACM cleanup is retried automatically until it succeeds. This detail isn't currently surfaced as a provider attribute (the revoke API response has an `acm_cleanup_status` field, but the provider doesn't read or expose it today) — if you need to confirm cleanup succeeded, check the certificate directly in ACM.
+
+---
+
+## CSR support
+
+By default Harbour generates a private key server-side (RSA 2048) and stores it in Secrets Manager. If you'd rather your private key never leave your own environment, generate your own keypair and CSR and pass it in via `csr` — Harbour signs your public key and never generates or holds the private key:
+
+```hcl
+resource "harbour_certificate" "csr_example" {
+  common_name = "csr-service.example.internal" # must match the CSR's subject CN
+  csr         = file("${path.module}/csr-service.csr")
+}
+```
+
+The certificate's actual CN and SANs always come from the CSR itself, not from `common_name`/`alt_names` — `common_name` is required and validated to match the CSR's subject CN, but is not otherwise authoritative once a CSR is set. This is also why `alt_names` conflicts with `csr`: put your SANs in the CSR's own SAN extension instead. Accepted key types: RSA ≥ 2048 bits, or EC P-256/P-384.
+
+`csr` also conflicts with `import_to_acm` — ACM's `ImportCertificate` API requires the private key as an input, which Harbour never has for a CSR-issued certificate.
+
+**Renewal:** a CSR-issued certificate can never be silently auto-renewed (Harbour has no private key to reissue from) — it always gets routed to Harbour's `certificate.expiring` SNS notification instead of a silent renewal attempt, regardless of `auto_renew`. Submit a fresh CSR (a new `harbour_certificate` resource, since `csr` forces replacement like every other input argument) before the current one expires.
+
+This provider does not generate a keypair/CSR on your behalf — combine it with the community [`hashicorp/tls`](https://registry.terraform.io/providers/hashicorp/tls/latest) provider's `tls_private_key` + `tls_cert_request` resources if you want Terraform to manage CSR generation too, or supply a CSR generated entirely outside Terraform.
 
 ---
 

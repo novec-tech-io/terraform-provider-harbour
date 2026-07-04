@@ -27,3 +27,13 @@ resource "aws_lb_listener" "https" {
   certificate_arn = harbour_certificate.api.acm_certificate_arn
   # ...
 }
+
+# csr lets you supply your own Certificate Signing Request — Harbour signs
+# your public key and never generates or holds the private key. The
+# certificate's CN/SANs come from the CSR itself, not from common_name/
+# alt_names. Conflicts with import_to_acm (which needs the private key)
+# and alt_names (SANs must be in the CSR's own extension instead).
+resource "harbour_certificate" "csr_example" {
+  common_name = "csr-service.example.internal" # must match the CSR's subject CN
+  csr         = file("${path.module}/csr-service.csr")
+}

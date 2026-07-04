@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -13,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -28,6 +31,7 @@ type CertificateResourceModel struct {
 	TTL               types.String `tfsdk:"ttl"`
 	AltNames          types.List   `tfsdk:"alt_names"`
 	ImportToACM       types.Bool   `tfsdk:"import_to_acm"`
+	CSR               types.String `tfsdk:"csr"`
 	RequestID         types.String `tfsdk:"request_id"`
 	SerialNumber      types.String `tfsdk:"serial_number"`
 	SecretARN         types.String `tfsdk:"secret_arn"`
@@ -80,9 +84,22 @@ func (r *CertificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
-				Description: "Import the issued certificate into ACM in the customer account via the tenant's configured cross-account role. Requires ACM import to be configured for this tenant (see harbour-acm-import IAM role).",
+				Description: "Import the issued certificate into ACM in the customer account via the tenant's configured cross-account role. Requires ACM import to be configured for this tenant (see harbour-acm-import IAM role). Conflicts with csr.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.RequiresReplace(),
+				},
+			},
+			"csr": schema.StringAttribute{
+				Optional:    true,
+				Description: "PEM-encoded Certificate Signing Request. When set, Harbour signs this public key instead of generating a private key server-side — the private key never leaves your environment. The certificate's CN/SANs come from the CSR itself, not from common_name/alt_names. Conflicts with import_to_acm and alt_names.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("import_to_acm"),
+						path.MatchRoot("alt_names"),
+					),
 				},
 			},
 			"request_id": schema.StringAttribute{
@@ -152,6 +169,7 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 		CommonName:  data.CommonName.ValueString(),
 		TTL:         data.TTL.ValueString(),
 		ImportToACM: data.ImportToACM.ValueBool(),
+		CSR:         data.CSR.ValueString(),
 	}
 
 	if !data.AltNames.IsNull() && !data.AltNames.IsUnknown() {

@@ -49,6 +49,7 @@ type IssueCertRequest struct {
 	TTL         string   `json:"ttl,omitempty"`
 	AltNames    []string `json:"alt_names,omitempty"`
 	ImportToACM bool     `json:"import_to_acm,omitempty"`
+	CSR         string   `json:"csr,omitempty"`
 }
 
 type IssueCertResponse struct {
