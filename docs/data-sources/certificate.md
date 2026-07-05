@@ -28,7 +28,7 @@ output "expiry_timestamp" {
 }
 
 output "acm_certificate_arn" {
-  description = "ACM certificate ARN, if the certificate was issued with import_to_acm"
+  description = "ACM certificate ARN, if the certificate was issued with export_to_acm"
   value       = data.harbour_certificate.example.acm_certificate_arn
 }
 ```
@@ -42,7 +42,7 @@ output "acm_certificate_arn" {
 
 ### Read-Only
 
-- `acm_certificate_arn` (String) ARN of the certificate imported into ACM in the customer account. Null unless the certificate was issued with import_to_acm.
+- `acm_certificate_arn` (String) ARN of the certificate exported to ACM in the customer account. Null unless the certificate was issued with export_to_acm.
 - `common_name` (String) Certificate common name (CN).
 - `expiry_timestamp` (Number) Certificate expiry as a Unix timestamp.
 - `id` (String) The ID of this resource.

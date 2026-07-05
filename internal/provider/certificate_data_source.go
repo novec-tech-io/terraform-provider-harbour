@@ -72,7 +72,7 @@ func (d *CertificateDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			},
 			"acm_certificate_arn": schema.StringAttribute{
 				Computed:    true,
-				Description: "ARN of the certificate imported into ACM in the customer account. Null unless the certificate was issued with import_to_acm.",
+				Description: "ARN of the certificate exported to ACM in the customer account. Null unless the certificate was issued with export_to_acm.",
 			},
 		},
 	}

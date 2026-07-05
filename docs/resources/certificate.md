@@ -29,13 +29,13 @@ output "expiry_timestamp" {
   value       = harbour_certificate.example.expiry_timestamp
 }
 
-# import_to_acm requires ACM import to be configured for this tenant
+# export_to_acm requires ACM export to be configured for this tenant
 # (a cross-account IAM role granting harbour-core sts:AssumeRole + acm:ImportCertificate).
 # The resulting ARN can be wired directly into AWS resources that expect an ACM cert.
 resource "harbour_certificate" "api" {
   common_name   = "api.example.internal"
   ttl           = "90d"
-  import_to_acm = true
+  export_to_acm = true
 }
 
 resource "aws_lb_listener" "https" {
@@ -46,7 +46,7 @@ resource "aws_lb_listener" "https" {
 # csr lets you supply your own Certificate Signing Request — Harbour signs
 # your public key and never generates or holds the private key. The
 # certificate's CN/SANs come from the CSR itself, not from common_name/
-# alt_names. Conflicts with import_to_acm (which needs the private key)
+# alt_names. Conflicts with export_to_acm (which needs the private key)
 # and alt_names (SANs must be in the CSR's own extension instead).
 resource "harbour_certificate" "csr_example" {
   common_name = "csr-service.example.internal" # must match the CSR's subject CN
@@ -64,13 +64,13 @@ resource "harbour_certificate" "csr_example" {
 ### Optional
 
 - `alt_names` (List of String) Subject alternative names (SANs).
-- `csr` (String) PEM-encoded Certificate Signing Request. When set, Harbour signs this public key instead of generating a private key server-side — the private key never leaves your environment. The certificate's CN/SANs come from the CSR itself, not from common_name/alt_names. Conflicts with import_to_acm and alt_names.
-- `import_to_acm` (Boolean) Import the issued certificate into ACM in the customer account via the tenant's configured cross-account role. Requires ACM import to be configured for this tenant (see harbour-acm-import IAM role). Conflicts with csr.
+- `csr` (String) PEM-encoded Certificate Signing Request. When set, Harbour signs this public key instead of generating a private key server-side — the private key never leaves your environment. The certificate's CN/SANs come from the CSR itself, not from common_name/alt_names. Conflicts with export_to_acm and alt_names.
+- `export_to_acm` (Boolean) Export the issued certificate to ACM in the customer account via the tenant's configured cross-account role. Requires ACM export to be configured for this tenant (see harbour-acm-import IAM role). Conflicts with csr.
 - `ttl` (String) Certificate TTL (e.g. 90d, 8760h). Defaults to the tenant default_cert_ttl when omitted.
 
 ### Read-Only
 
-- `acm_certificate_arn` (String) ARN of the certificate imported into ACM in the customer account. Only set when import_to_acm is true. Usable directly as certificate_arn on AWS resources such as aws_lb_listener.
+- `acm_certificate_arn` (String) ARN of the certificate exported to ACM in the customer account. Only set when export_to_acm is true. Usable directly as certificate_arn on AWS resources such as aws_lb_listener.
 - `expiry_timestamp` (Number) Certificate expiry as a Unix timestamp.
 - `id` (String) The ID of this resource.
 - `request_id` (String)

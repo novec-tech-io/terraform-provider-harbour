@@ -92,8 +92,8 @@ resource "harbour_certificate" "api" {
 | `common_name` | Yes | Certificate CN |
 | `ttl` | No | Certificate TTL, e.g. `90d`, `8760h`. Defaults to the tenant `default_cert_ttl` |
 | `alt_names` | No | List of subject alternative names (SANs) |
-| `import_to_acm` | No | Import the issued certificate into ACM in your AWS account. Requires ACM import to be configured for your tenant (see [ACM import](#acm-import) below). Defaults to `false`. Conflicts with `csr` |
-| `csr` | No | PEM-encoded Certificate Signing Request — Harbour signs your public key instead of generating a private key server-side (see [CSR support](#csr-support) below). Conflicts with `import_to_acm` and `alt_names` |
+| `export_to_acm` | No | Export the issued certificate to ACM in your AWS account. Requires ACM export to be configured for your tenant (see [ACM export](#acm-export) below). Defaults to `false`. Conflicts with `csr` |
+| `csr` | No | PEM-encoded Certificate Signing Request — Harbour signs your public key instead of generating a private key server-side (see [CSR support](#csr-support) below). Conflicts with `export_to_acm` and `alt_names` |
 
 #### Attributes
 
@@ -105,7 +105,7 @@ resource "harbour_certificate" "api" {
 | `secret_arn` | Secrets Manager ARN containing the certificate material |
 | `expiry_timestamp` | Certificate expiry as a Unix timestamp |
 | `status` | Current status: `requested`, `issuing`, `issued`, `revoked`, `expired`, `failed` |
-| `acm_certificate_arn` | ARN of the certificate imported into ACM in your account. Only set when `import_to_acm` is `true` |
+| `acm_certificate_arn` | ARN of the certificate exported to ACM in your account. Only set when `export_to_acm` is `true` |
 
 ---
 
@@ -135,15 +135,15 @@ Returns the same attributes as the `harbour_certificate` resource.
 
 ---
 
-## ACM import
+## ACM export
 
-Setting `import_to_acm = true` imports the issued certificate into ACM in your AWS account, exposing a usable `acm_certificate_arn` you can wire directly into AWS resources:
+Setting `export_to_acm = true` exports the issued certificate to ACM in your AWS account, exposing a usable `acm_certificate_arn` you can wire directly into AWS resources:
 
 ```hcl
 resource "harbour_certificate" "api" {
   common_name   = "api.example.internal"
   ttl           = "90d"
-  import_to_acm = true
+  export_to_acm = true
 }
 
 resource "aws_lb_listener" "https" {
@@ -152,9 +152,9 @@ resource "aws_lb_listener" "https" {
 }
 ```
 
-This requires a one-time setup in your AWS account: an IAM role trusting Harbour's certificate-issuance **and** revocation Lambdas, granting `acm:ImportCertificate`, `acm:AddTagsToCertificate`, and `acm:DeleteCertificate`. Without this role configured for your tenant, `import_to_acm = true` fails with "ACM import is not configured for this tenant". Contact Novec to enable it.
+This requires a one-time setup in your AWS account: an IAM role trusting Harbour's certificate-issuance **and** revocation Lambdas, granting `acm:ImportCertificate`, `acm:AddTagsToCertificate`, and `acm:DeleteCertificate`. Without this role configured for your tenant, `export_to_acm = true` fails with "ACM export is not configured for this tenant". Contact Novec to enable it.
 
-On renewal, the certificate is re-imported onto the same ACM ARN, so listeners and other references never need to change. On revocation (including `terraform destroy`), Harbour also deletes the certificate from your ACM — best-effort: if the ACM certificate is still attached to a resource (e.g. a load balancer listener you haven't updated yet), the Harbour-side revoke still succeeds and the ACM cleanup is retried automatically until it succeeds. This detail isn't currently surfaced as a provider attribute (the revoke API response has an `acm_cleanup_status` field, but the provider doesn't read or expose it today) — if you need to confirm cleanup succeeded, check the certificate directly in ACM.
+On renewal, the certificate is re-exported onto the same ACM ARN, so listeners and other references never need to change. On revocation (including `terraform destroy`), Harbour also deletes the certificate from your ACM — best-effort: if the ACM certificate is still attached to a resource (e.g. a load balancer listener you haven't updated yet), the Harbour-side revoke still succeeds and the ACM cleanup is retried automatically until it succeeds. This detail isn't currently surfaced as a provider attribute (the revoke API response has an `acm_cleanup_status` field, but the provider doesn't read or expose it today) — if you need to confirm cleanup succeeded, check the certificate directly in ACM.
 
 ---
 
@@ -171,7 +171,7 @@ resource "harbour_certificate" "csr_example" {
 
 The certificate's actual CN and SANs always come from the CSR itself, not from `common_name`/`alt_names` — `common_name` is required and validated to match the CSR's subject CN, but is not otherwise authoritative once a CSR is set. This is also why `alt_names` conflicts with `csr`: put your SANs in the CSR's own SAN extension instead. Accepted key types: RSA ≥ 2048 bits, or EC P-256/P-384.
 
-`csr` also conflicts with `import_to_acm` — ACM's `ImportCertificate` API requires the private key as an input, which Harbour never has for a CSR-issued certificate.
+`csr` also conflicts with `export_to_acm` — ACM's `ImportCertificate` API requires the private key as an input, which Harbour never has for a CSR-issued certificate.
 
 **Renewal:** a CSR-issued certificate can never be silently auto-renewed (Harbour has no private key to reissue from) — it always gets routed to Harbour's `certificate.expiring` SNS notification instead of a silent renewal attempt, regardless of `auto_renew`. Submit a fresh CSR (a new `harbour_certificate` resource, since `csr` forces replacement like every other input argument) before the current one expires.
 

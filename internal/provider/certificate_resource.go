@@ -30,7 +30,7 @@ type CertificateResourceModel struct {
 	CommonName        types.String `tfsdk:"common_name"`
 	TTL               types.String `tfsdk:"ttl"`
 	AltNames          types.List   `tfsdk:"alt_names"`
-	ImportToACM       types.Bool   `tfsdk:"import_to_acm"`
+	ExportToACM       types.Bool   `tfsdk:"export_to_acm"`
 	CSR               types.String `tfsdk:"csr"`
 	RequestID         types.String `tfsdk:"request_id"`
 	SerialNumber      types.String `tfsdk:"serial_number"`
@@ -80,24 +80,24 @@ func (r *CertificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 					listplanmodifier.RequiresReplace(),
 				},
 			},
-			"import_to_acm": schema.BoolAttribute{
+			"export_to_acm": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
-				Description: "Import the issued certificate into ACM in the customer account via the tenant's configured cross-account role. Requires ACM import to be configured for this tenant (see harbour-acm-import IAM role). Conflicts with csr.",
+				Description: "Export the issued certificate to ACM in the customer account via the tenant's configured cross-account role. Requires ACM export to be configured for this tenant (see harbour-acm-import IAM role). Conflicts with csr.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.RequiresReplace(),
 				},
 			},
 			"csr": schema.StringAttribute{
 				Optional:    true,
-				Description: "PEM-encoded Certificate Signing Request. When set, Harbour signs this public key instead of generating a private key server-side — the private key never leaves your environment. The certificate's CN/SANs come from the CSR itself, not from common_name/alt_names. Conflicts with import_to_acm and alt_names.",
+				Description: "PEM-encoded Certificate Signing Request. When set, Harbour signs this public key instead of generating a private key server-side — the private key never leaves your environment. The certificate's CN/SANs come from the CSR itself, not from common_name/alt_names. Conflicts with export_to_acm and alt_names.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(
-						path.MatchRoot("import_to_acm"),
+						path.MatchRoot("export_to_acm"),
 						path.MatchRoot("alt_names"),
 					),
 				},
@@ -134,7 +134,7 @@ func (r *CertificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			"acm_certificate_arn": schema.StringAttribute{
 				Computed:    true,
-				Description: "ARN of the certificate imported into ACM in the customer account. Only set when import_to_acm is true. Usable directly as certificate_arn on AWS resources such as aws_lb_listener.",
+				Description: "ARN of the certificate exported to ACM in the customer account. Only set when export_to_acm is true. Usable directly as certificate_arn on AWS resources such as aws_lb_listener.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -168,7 +168,7 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 	issueReq := IssueCertRequest{
 		CommonName:  data.CommonName.ValueString(),
 		TTL:         data.TTL.ValueString(),
-		ImportToACM: data.ImportToACM.ValueBool(),
+		ExportToACM: data.ExportToACM.ValueBool(),
 		CSR:         data.CSR.ValueString(),
 	}
 

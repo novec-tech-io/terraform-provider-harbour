@@ -14,13 +14,13 @@ output "expiry_timestamp" {
   value       = harbour_certificate.example.expiry_timestamp
 }
 
-# import_to_acm requires ACM import to be configured for this tenant
+# export_to_acm requires ACM export to be configured for this tenant
 # (a cross-account IAM role granting harbour-core sts:AssumeRole + acm:ImportCertificate).
 # The resulting ARN can be wired directly into AWS resources that expect an ACM cert.
 resource "harbour_certificate" "api" {
   common_name   = "api.example.internal"
   ttl           = "90d"
-  import_to_acm = true
+  export_to_acm = true
 }
 
 resource "aws_lb_listener" "https" {
@@ -31,7 +31,7 @@ resource "aws_lb_listener" "https" {
 # csr lets you supply your own Certificate Signing Request — Harbour signs
 # your public key and never generates or holds the private key. The
 # certificate's CN/SANs come from the CSR itself, not from common_name/
-# alt_names. Conflicts with import_to_acm (which needs the private key)
+# alt_names. Conflicts with export_to_acm (which needs the private key)
 # and alt_names (SANs must be in the CSR's own extension instead).
 resource "harbour_certificate" "csr_example" {
   common_name = "csr-service.example.internal" # must match the CSR's subject CN
