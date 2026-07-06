@@ -110,6 +110,7 @@ func (p *HarbourProvider) Configure(ctx context.Context, req provider.ConfigureR
 func (p *HarbourProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewCertificateResource,
+		NewCertificateImportResource,
 	}
 }
 

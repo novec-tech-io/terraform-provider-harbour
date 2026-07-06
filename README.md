@@ -109,6 +109,41 @@ resource "harbour_certificate" "api" {
 
 ---
 
+### `harbour_certificate_import`
+
+Registers a certificate that already lives in ACM (however it got there — including a previous `harbour_certificate` with `export_to_acm = true`, or something imported entirely outside Harbour) for Harbour lifecycle tracking, without submitting a PEM or Harbour ever holding the private key. See [ACM import](#acm-import) below.
+
+All arguments are immutable — any change forces replacement.
+
+```hcl
+resource "harbour_certificate_import" "existing" {
+  acm_certificate_arn = "arn:aws:acm:eu-west-1:123456789012:certificate/abc-123"
+}
+```
+
+#### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `acm_certificate_arn` | Yes | ARN of an existing ACM certificate in your account. Its ACM `Type` must be `IMPORTED` — an `AMAZON_ISSUED` cert can't be registered this way |
+| `auto_renew` | No | Whether Harbour proactively renews this certificate ahead of expiry. Defaults to the tenant `default_auto_renew` config value |
+
+#### Attributes
+
+| Attribute | Description |
+|-----------|-------------|
+| `id` | Same as `request_id` |
+| `request_id` | Harbour request ID |
+| `cn` | Common name, read from the ACM certificate's `DomainName` at registration time |
+| `sans` | Subject alternative names, read from the ACM certificate |
+| `serial_number` | `null` until this certificate's first Harbour-managed renewal — Harbour never signed the originally-imported material |
+| `secret_arn` | `null` until the first renewal, same reasoning as `serial_number` |
+| `expiry_timestamp` | Certificate expiry as a Unix timestamp, read from ACM at registration time |
+| `status` | Current status: `issued`, `renewing`, `revoked`, `expired` |
+| `issuance_method` | Always `"imported"` |
+
+---
+
 ## Data Sources
 
 ### `harbour_certificate`
@@ -155,6 +190,26 @@ resource "aws_lb_listener" "https" {
 This requires a one-time setup in your AWS account: an IAM role trusting Harbour's certificate-issuance **and** revocation Lambdas, granting `acm:ImportCertificate`, `acm:AddTagsToCertificate`, and `acm:DeleteCertificate`. Without this role configured for your tenant, `export_to_acm = true` fails with "ACM export is not configured for this tenant". Contact Novec to enable it.
 
 On renewal, the certificate is re-exported onto the same ACM ARN, so listeners and other references never need to change. On revocation (including `terraform destroy`), Harbour also deletes the certificate from your ACM — best-effort: if the ACM certificate is still attached to a resource (e.g. a load balancer listener you haven't updated yet), the Harbour-side revoke still succeeds and the ACM cleanup is retried automatically until it succeeds. This detail isn't currently surfaced as a provider attribute (the revoke API response has an `acm_cleanup_status` field, but the provider doesn't read or expose it today) — if you need to confirm cleanup succeeded, check the certificate directly in ACM.
+
+---
+
+## ACM import
+
+The reverse direction of ACM export: if you already have a certificate sitting in ACM — imported by some earlier process, a migration off another CA, or a previous `harbour_certificate` with `export_to_acm = true` — `harbour_certificate_import` registers it for Harbour lifecycle tracking without submitting a PEM or handing over a private key (Harbour never gets one — ACM's own API never returns it either, for `AMAZON_ISSUED` or `IMPORTED` certs alike).
+
+```hcl
+resource "harbour_certificate_import" "existing" {
+  acm_certificate_arn = "arn:aws:acm:eu-west-1:123456789012:certificate/abc-123"
+}
+```
+
+**No rotation at registration time.** The ACM object is left completely untouched until your tenant's ordinary renewal window comes around, at which point Harbour reissues and re-exports onto the *same* ARN — the identical mechanism `export_to_acm` renewal already uses. This gives you the full renewal window to get Harbour's CA chain trusted wherever the certificate is validated, before anything about the actual material changes.
+
+Requires the same one-time cross-account IAM role as ACM export (see above), with two additional read-only permissions: `acm:DescribeCertificate` and `acm:GetCertificate`.
+
+**Revocation before the first renewal can only delete the ACM object** — Harbour never signed this certificate, so there's no CA-side serial to revoke via the certificate authority. `terraform destroy` (or removing the resource) still works and still deletes the ACM certificate; there's just no corresponding CA revocation until after the first renewal makes it a normal Harbour-issued certificate.
+
+**An ARN can only be registered once.** If it's already tracked by another active Harbour record — most likely a `harbour_certificate` with `export_to_acm = true` that issued it in the first place — `apply` fails with a `409` from the API. Revoke or wait for that other record to renew first.
 
 ---
 

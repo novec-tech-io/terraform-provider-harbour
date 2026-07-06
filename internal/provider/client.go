@@ -58,14 +58,22 @@ type IssueCertResponse struct {
 }
 
 type CertificateRecord struct {
-	RequestID         string `json:"request_id"`
-	CN                string `json:"cn"`
-	Status            string `json:"status"`
-	TTL               string `json:"ttl"`
-	SerialNumber      string `json:"serial_number"`
-	SecretARN         string `json:"secret_arn"`
-	ExpiryTimestamp   int64  `json:"expiry_timestamp"`
-	ACMCertificateARN string `json:"acm_certificate_arn,omitempty"`
+	RequestID         string   `json:"request_id"`
+	CN                string   `json:"cn"`
+	Status            string   `json:"status"`
+	TTL               string   `json:"ttl"`
+	SerialNumber      string   `json:"serial_number"`
+	SecretARN         string   `json:"secret_arn"`
+	ExpiryTimestamp   int64    `json:"expiry_timestamp"`
+	ACMCertificateARN string   `json:"acm_certificate_arn,omitempty"`
+	SANs              []string `json:"sans,omitempty"`
+	IssuanceMethod    string   `json:"issuance_method,omitempty"`
+	AutoRenew         string   `json:"auto_renew,omitempty"`
+}
+
+type ImportCertRequest struct {
+	ACMCertificateARN string `json:"acm_certificate_arn"`
+	AutoRenew         *bool  `json:"auto_renew,omitempty"`
 }
 
 type RevokeRequest struct {
@@ -79,6 +87,14 @@ func (c *Client) IssueCertificate(ctx context.Context, req IssueCertRequest) (*I
 		return nil, err
 	}
 	return &resp, nil
+}
+
+func (c *Client) ImportCertificate(ctx context.Context, req ImportCertRequest) (*CertificateRecord, error) {
+	var record CertificateRecord
+	if err := c.do(ctx, http.MethodPost, "/certificates/import", req, &record); err != nil {
+		return nil, err
+	}
+	return &record, nil
 }
 
 func (c *Client) GetCertificate(ctx context.Context, requestID string) (*CertificateRecord, error) {
