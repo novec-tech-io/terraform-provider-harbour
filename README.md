@@ -18,7 +18,7 @@ terraform {
   required_providers {
     harbour = {
       source  = "novec-tech-io/harbour"
-      version = "~> 0.5"
+      version = "~> 0.6"
     }
   }
 }
@@ -167,6 +167,33 @@ output "secret_arn" {
 | `request_id` | Yes | Harbour request ID of the certificate to read |
 
 Returns the same attributes as the `harbour_certificate` resource.
+
+---
+
+### `harbour_ca_certificates`
+
+Reads your Harbour deployment's CA certificates, for distributing the trust anchor to wherever your certificates are validated. Takes no arguments.
+
+```hcl
+data "harbour_ca_certificates" "this" {}
+
+resource "local_file" "harbour_root_ca" {
+  content  = data.harbour_ca_certificates.this.root_pem
+  filename = "/etc/pki/ca-trust/source/anchors/harbour-root-ca.pem"
+}
+```
+
+#### Attributes
+
+| Attribute | Description |
+|-----------|-------------|
+| `roots` | List of PEM-encoded root CA certificates — install these in trust stores |
+| `intermediates` | List of PEM-encoded intermediate CA certificates |
+| `root_pem` | First element of `roots` — convenience scalar for the common single-root case |
+| `intermediate_pem` | First element of `intermediates` |
+| `chain_pem` | Full CA chain as concatenated PEM, intermediate first, root last |
+
+**Anchor trust on the root, not the intermediate.** The list attributes hold a single element today, but stay lists deliberately: during a CA rotation or bring-your-own-root migration window Harbour may publish two overlapping anchors, and a trust store built from `roots` picks both up without a schema change.
 
 ---
 

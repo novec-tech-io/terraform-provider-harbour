@@ -76,6 +76,12 @@ type ImportCertRequest struct {
 	AutoRenew         *bool  `json:"auto_renew,omitempty"`
 }
 
+type CAResponse struct {
+	Roots         []string `json:"roots"`
+	Intermediates []string `json:"intermediates"`
+	ChainPEM      string   `json:"chain_pem"`
+}
+
 type RevokeRequest struct {
 	RequestID    string `json:"request_id,omitempty"`
 	SerialNumber string `json:"serial_number,omitempty"`
@@ -103,6 +109,14 @@ func (c *Client) GetCertificate(ctx context.Context, requestID string) (*Certifi
 		return nil, err
 	}
 	return &record, nil
+}
+
+func (c *Client) GetCA(ctx context.Context) (*CAResponse, error) {
+	var ca CAResponse
+	if err := c.do(ctx, http.MethodGet, "/ca", nil, &ca); err != nil {
+		return nil, err
+	}
+	return &ca, nil
 }
 
 func (c *Client) RevokeCertificate(ctx context.Context, req RevokeRequest) error {
