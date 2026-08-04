@@ -32,6 +32,7 @@ type CertificateResourceModel struct {
 	AltNames          types.List   `tfsdk:"alt_names"`
 	ExportToACM       types.Bool   `tfsdk:"export_to_acm"`
 	CSR               types.String `tfsdk:"csr"`
+	DeliveryAccountID types.String `tfsdk:"delivery_account_id"`
 	RequestID         types.String `tfsdk:"request_id"`
 	SerialNumber      types.String `tfsdk:"serial_number"`
 	SecretARN         types.String `tfsdk:"secret_arn"`
@@ -102,6 +103,13 @@ func (r *CertificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 					),
 				},
 			},
+			"delivery_account_id": schema.StringAttribute{
+				Optional:    true,
+				Description: "12-digit AWS account ID to export the certificate to when export_to_acm is true. Must already be registered in the tenant's delivery_account_ids config (via PUT /config) and have the harbour-managed-access IAM role applied. Omit to use the tenant's default_delivery_account_id.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"request_id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -166,10 +174,11 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	issueReq := IssueCertRequest{
-		CommonName:  data.CommonName.ValueString(),
-		TTL:         data.TTL.ValueString(),
-		ExportToACM: data.ExportToACM.ValueBool(),
-		CSR:         data.CSR.ValueString(),
+		CommonName:        data.CommonName.ValueString(),
+		TTL:               data.TTL.ValueString(),
+		ExportToACM:       data.ExportToACM.ValueBool(),
+		CSR:               data.CSR.ValueString(),
+		DeliveryAccountID: data.DeliveryAccountID.ValueString(),
 	}
 
 	if !data.AltNames.IsNull() && !data.AltNames.IsUnknown() {

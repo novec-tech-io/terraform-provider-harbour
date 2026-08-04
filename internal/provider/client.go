@@ -45,11 +45,12 @@ type ConflictError struct {
 func (e *ConflictError) Error() string { return e.Message }
 
 type IssueCertRequest struct {
-	CommonName  string   `json:"common_name"`
-	TTL         string   `json:"ttl,omitempty"`
-	AltNames    []string `json:"alt_names,omitempty"`
-	ExportToACM bool     `json:"export_to_acm,omitempty"`
-	CSR         string   `json:"csr,omitempty"`
+	CommonName        string   `json:"common_name"`
+	TTL               string   `json:"ttl,omitempty"`
+	AltNames          []string `json:"alt_names,omitempty"`
+	ExportToACM       bool     `json:"export_to_acm,omitempty"`
+	CSR               string   `json:"csr,omitempty"`
+	DeliveryAccountID string   `json:"delivery_account_id,omitempty"`
 }
 
 type IssueCertResponse struct {

@@ -37,3 +37,15 @@ resource "harbour_certificate" "csr_example" {
   common_name = "csr-service.example.internal" # must match the CSR's subject CN
   csr         = file("${path.module}/csr-service.csr")
 }
+
+# delivery_account_id steers export_to_acm at multi-account tenants — which
+# AWS account the certificate lands in. The account must already be
+# registered in delivery_account_ids (PUT /config) and have the
+# harbour-managed-access IAM role applied. Omit it to use the tenant's
+# default_delivery_account_id instead.
+resource "harbour_certificate" "multi_account" {
+  common_name         = "api.example.internal"
+  ttl                 = "90d"
+  export_to_acm       = true
+  delivery_account_id = "222222222222"
+}

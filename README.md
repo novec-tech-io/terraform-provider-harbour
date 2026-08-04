@@ -94,6 +94,7 @@ resource "harbour_certificate" "api" {
 | `alt_names` | No | List of subject alternative names (SANs) |
 | `export_to_acm` | No | Export the issued certificate to ACM in your AWS account. Requires ACM export to be configured for your tenant (see [ACM export](#acm-export) below). Defaults to `false`. Conflicts with `csr` |
 | `csr` | No | PEM-encoded Certificate Signing Request — Harbour signs your public key instead of generating a private key server-side (see [CSR support](#csr-support) below). Conflicts with `export_to_acm` and `alt_names` |
+| `delivery_account_id` | No | 12-digit AWS account ID to export to when `export_to_acm` is `true`, for tenants with more than one delivery account registered. Must already be in the tenant's `delivery_account_ids` config with `harbour-managed-access` applied there. Omit to use the tenant's `default_delivery_account_id` |
 
 #### Attributes
 
@@ -217,6 +218,23 @@ resource "aws_lb_listener" "https" {
 This requires a one-time setup in your AWS account: an IAM role trusting Harbour's certificate-issuance **and** revocation Lambdas, granting `acm:ImportCertificate`, `acm:AddTagsToCertificate`, and `acm:DeleteCertificate`. Without this role configured for your tenant, `export_to_acm = true` fails with "ACM export is not configured for this tenant". Contact Novec to enable it.
 
 On renewal, the certificate is re-exported onto the same ACM ARN, so listeners and other references never need to change. On revocation (including `terraform destroy`), Harbour also deletes the certificate from your ACM — best-effort: if the ACM certificate is still attached to a resource (e.g. a load balancer listener you haven't updated yet), the Harbour-side revoke still succeeds and the ACM cleanup is retried automatically until it succeeds. This detail isn't currently surfaced as a provider attribute (the revoke API response has an `acm_cleanup_status` field, but the provider doesn't read or expose it today) — if you need to confirm cleanup succeeded, check the certificate directly in ACM.
+
+### Multiple delivery accounts
+
+If your tenant has more than one AWS account registered for ACM export (e.g. separate accounts per environment or business unit), use `delivery_account_id` to choose which one a given certificate lands in:
+
+```hcl
+resource "harbour_certificate" "prod" {
+  common_name         = "api.prod.example.internal"
+  ttl                 = "90d"
+  export_to_acm       = true
+  delivery_account_id = "222222222222"
+}
+```
+
+The account must already be in your tenant's `delivery_account_ids` config (set via `PUT /config`, capped by your plan's delivery-account entitlement) and have the `harbour-managed-access` IAM role applied there — the same role setup described above, just in that account instead. Omit `delivery_account_id` and Harbour uses your tenant's `default_delivery_account_id` instead. A `delivery_account_id` that isn't registered is rejected with a 403 at issuance time — the provider surfaces this as a plain API error, no client-side validation.
+
+On renewal, Harbour derives the delivery account from the certificate's own `acm_certificate_arn` (an ACM ARN always embeds its account), not from `delivery_account_id` — so the certificate always re-lands in the same account it was originally exported to, even if your tenant's registered accounts change later.
 
 ---
 
