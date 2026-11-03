@@ -49,3 +49,27 @@ resource "harbour_certificate" "multi_account" {
   export_to_acm       = true
   delivery_account_id = "222222222222"
 }
+
+# When acm_certificate_arn feeds a live AWS resource (a listener, CloudFront,
+# etc.), changing ttl / common_name / alt_names replaces the certificate.
+# Terraform's default order is destroy-old-then-create-new, which revokes the
+# old certificate while the listener still uses it. Use create_before_destroy
+# so the new certificate is issued and the listener repointed first.
+# allow_duplicate_cn = true is required with it: the old and new certificates
+# briefly share a common_name, which Harbour's duplicate-CN guard otherwise
+# rejects with a 409.
+resource "harbour_certificate" "api_safe_replace" {
+  common_name        = "api.example.internal"
+  ttl                = "90d"
+  export_to_acm      = true
+  allow_duplicate_cn = true
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_lb_listener" "https_safe_replace" {
+  certificate_arn = harbour_certificate.api_safe_replace.acm_certificate_arn
+  # ...
+}
