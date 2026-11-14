@@ -219,7 +219,10 @@ func (r *CertificateResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	record, err := r.client.GetCertificate(ctx, data.RequestID.ValueString())
+	// Follow the renewal chain: the request_id in state may belong to a
+	// superseded record (KAN-171). recordToModel below rewrites id/request_id
+	// and the other computed attributes from the live successor.
+	record, err := r.client.GetCurrentCertificate(ctx, data.RequestID.ValueString())
 	if err != nil {
 		var nfe *NotFoundError
 		if errors.As(err, &nfe) {
@@ -262,7 +265,21 @@ func (r *CertificateResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	err := r.client.RevokeCertificate(ctx, RevokeRequest{RequestID: data.RequestID.ValueString()})
+	// Resolve to the live record first: after a renewal the request_id held in
+	// state is a superseded record, and revoking it is a 409 the check below
+	// swallows -- leaving the live successor (and its ACM object) behind
+	// (KAN-171). Resolving here also covers `destroy -refresh=false`.
+	current, err := r.client.GetCurrentCertificate(ctx, data.RequestID.ValueString())
+	if err != nil {
+		var nfe *NotFoundError
+		if errors.As(err, &nfe) {
+			return
+		}
+		resp.Diagnostics.AddError("Failed to resolve the current certificate before revoking", err.Error())
+		return
+	}
+
+	err = r.client.RevokeCertificate(ctx, RevokeRequest{RequestID: current.RequestID})
 	if err != nil {
 		var nfe *NotFoundError
 		var ce *ConflictError

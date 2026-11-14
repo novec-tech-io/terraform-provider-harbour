@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -71,6 +72,11 @@ type CertificateRecord struct {
 	SANs              []string `json:"sans,omitempty"`
 	IssuanceMethod    string   `json:"issuance_method,omitempty"`
 	AutoRenew         string   `json:"auto_renew,omitempty"`
+	// RenewedToRequestID is set on a record whose certificate was renewed:
+	// renewal is write-once (a new record per renewal), so the original
+	// request_id a Terraform resource was created with goes `superseded` and
+	// points forward at the live successor.
+	RenewedToRequestID string `json:"renewed_to_request_id,omitempty"`
 }
 
 type ImportCertRequest struct {
@@ -111,6 +117,47 @@ func (c *Client) GetCertificate(ctx context.Context, requestID string) (*Certifi
 		return nil, err
 	}
 	return &record, nil
+}
+
+// maxRenewalChainHops bounds GetCurrentCertificate's walk. A certificate
+// renewed once a day for years would still be far under this; the cap exists
+// to turn a corrupt (looping) chain into an error instead of a hang.
+const maxRenewalChainHops = 50
+
+// GetCurrentCertificate returns the live record for a certificate lineage,
+// following renewed_to_request_id forward from requestID until it reaches a
+// record that has not been superseded. Harbour renewals are write-once, so a
+// Terraform resource created with request_id X is, after its first renewal,
+// bound to a dead (`superseded`) record -- every Read and Delete must resolve
+// to the current record first or they operate on the wrong one (KAN-171).
+//
+// A missing starting record is a *NotFoundError, as with GetCertificate. A
+// successor that cannot be found mid-chain is a plain error, deliberately
+// not a NotFoundError: callers treat that as "the resource is gone" and drop
+// it from state, which is wrong when the original record clearly exists.
+func (c *Client) GetCurrentCertificate(ctx context.Context, requestID string) (*CertificateRecord, error) {
+	seen := map[string]bool{}
+	id := requestID
+	for hop := 0; hop <= maxRenewalChainHops; hop++ {
+		if seen[id] {
+			return nil, fmt.Errorf("renewal chain starting at %s loops back to %s", requestID, id)
+		}
+		seen[id] = true
+
+		record, err := c.GetCertificate(ctx, id)
+		if err != nil {
+			var nfe *NotFoundError
+			if hop > 0 && errors.As(err, &nfe) {
+				return nil, fmt.Errorf("certificate %s was renewed to %s, which could not be found", requestID, id)
+			}
+			return nil, err
+		}
+		if record.Status != "superseded" || record.RenewedToRequestID == "" {
+			return record, nil
+		}
+		id = record.RenewedToRequestID
+	}
+	return nil, fmt.Errorf("renewal chain starting at %s is longer than %d records", requestID, maxRenewalChainHops)
 }
 
 func (c *Client) GetCA(ctx context.Context) (*CAResponse, error) {
