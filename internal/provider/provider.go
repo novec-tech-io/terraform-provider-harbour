@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -16,6 +17,10 @@ import (
 )
 
 var _ provider.Provider = &HarbourProvider{}
+
+// Actions need Terraform 1.14+; an older Terraform ignores them, so every
+// resource and data source keeps working there.
+var _ provider.ProviderWithActions = &HarbourProvider{}
 
 type HarbourProvider struct {
 	version string
@@ -105,12 +110,19 @@ func (p *HarbourProvider) Configure(ctx context.Context, req provider.ConfigureR
 	client := NewClient(data.Endpoint.ValueString(), region, awsCfg)
 	resp.DataSourceData = client
 	resp.ResourceData = client
+	resp.ActionData = client
 }
 
 func (p *HarbourProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewCertificateResource,
 		NewCertificateImportResource,
+	}
+}
+
+func (p *HarbourProvider) Actions(_ context.Context) []func() action.Action {
+	return []func() action.Action{
+		NewCertificateRenewAction,
 	}
 }
 

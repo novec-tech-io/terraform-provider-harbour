@@ -1,0 +1,44 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+~> **Requires Terraform 1.14 or later.** The rest of this provider works on older versions of Terraform, but a configuration that contains an `action` block is rejected outright by Terraform before 1.14 (`Unsupported block type`). Keep this action in its own file or module, and set `required_version = ">= 1.14"` where it lives. On an older Terraform, force a renewal by calling the API directly: see `POST /certificates/{request_id}/renew` in the Harbour user manual.
+
+{{ if .HasExamples -}}
+## Example Usage
+
+{{- range .ExampleFiles }}
+
+{{ tffile . }}
+{{- end }}
+{{- end }}
+
+## How it behaves
+
+- **Same certificate, new record.** A renewal issues a new certificate under a new `request_id` and supersedes the old record, exactly as an automatic renewal does. For an `export_to_acm` certificate the new material lands on the **same ACM ARN**, so listeners and other resources that reference it do not change.
+- **State catches up on the next refresh.** An action only sees its own configuration; it cannot update `harbour_certificate` in state. After it runs, the next plan, apply or `terraform apply -refresh-only` follows the renewal and shows the new `request_id`, `serial_number`, `secret_arn` and `expiry_timestamp` as ordinary drift. It never proposes replacing the certificate.
+- **Any `request_id` in the certificate's history works.** The action resolves it to the live certificate before renewing, so it is safe to pass a value from state that is behind a renewal.
+
+## Limits
+
+An error is returned, and nothing is renewed, when:
+
+- the certificate is not currently `issued` (for example it is revoked or expired);
+- the certificate was issued from your own CSR (`csr`): Harbour holds no private key to reissue from, so submit a fresh CSR instead;
+- the certificate was itself created by a renewal in the last 15 minutes (a cooldown, to stop runaway loops);
+- your deployment's daily issuance limit has been reached.
+
+If the renewal fails part-way, the existing certificate is unchanged and still valid.
+
+## If a triggered renewal fails
+
+When the action runs from an `action_trigger` and fails, the apply exits non-zero, but the resource carrying the trigger has already been updated. Running `terraform apply` again reports **no changes** and does not retry. Fix the cause (usually: wait out the cooldown), then run the action explicitly with `terraform apply -invoke=action.harbour_certificate_renew.<name>`, or change the trigger value again. Prefer `-invoke` when you simply want "renew now".
+
+{{ .SchemaMarkdown | trimspace }}

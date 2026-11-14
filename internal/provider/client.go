@@ -45,6 +45,31 @@ type ConflictError struct {
 
 func (e *ConflictError) Error() string { return e.Message }
 
+// APIError is any non-2xx, non-404/409 response from the Harbour API. Error()
+// keeps the exact "harbour API returned <status>: <body>" text callers have
+// always seen; Status and Messages let callers (the renew action) show the
+// API's own message instead of raw JSON.
+type APIError struct {
+	Status int
+	Body   string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("harbour API returned %d: %s", e.Status, e.Body)
+}
+
+// Messages returns the API's `{"errors": [...]}` strings, or the raw body if
+// it isn't in that shape.
+func (e *APIError) Messages() string {
+	var parsed struct {
+		Errors []string `json:"errors"`
+	}
+	if err := json.Unmarshal([]byte(e.Body), &parsed); err == nil && len(parsed.Errors) > 0 {
+		return strings.Join(parsed.Errors, "; ")
+	}
+	return e.Body
+}
+
 type IssueCertRequest struct {
 	CommonName        string   `json:"common_name"`
 	TTL               string   `json:"ttl,omitempty"`
@@ -117,6 +142,26 @@ func (c *Client) GetCertificate(ctx context.Context, requestID string) (*Certifi
 		return nil, err
 	}
 	return &record, nil
+}
+
+// RenewCertResponse is POST /certificates/{request_id}/renew's success body
+// (KAN-166): the old record is now superseded, the new one is the live cert.
+type RenewCertResponse struct {
+	OldRequestID string            `json:"old_request_id"`
+	NewRequestID string            `json:"new_request_id"`
+	Certificate  CertificateRecord `json:"certificate"`
+}
+
+// RenewCertificate force-renews one issued certificate now (KAN-166). The
+// API answers 404 (unknown), 409 (not issued / CSR-issued / a concurrent
+// renewal), 429 (cooldown or daily issuance cap) or 502 (renewal failed; the
+// existing certificate is unchanged and still valid).
+func (c *Client) RenewCertificate(ctx context.Context, requestID string) (*RenewCertResponse, error) {
+	var out RenewCertResponse
+	if err := c.do(ctx, http.MethodPost, "/certificates/"+requestID+"/renew", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // maxRenewalChainHops bounds GetCurrentCertificate's walk. A certificate
@@ -247,7 +292,7 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 		return &ConflictError{Message: fmt.Sprintf("conflict: %s", string(respBytes))}
 	}
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("harbour API returned %d: %s", resp.StatusCode, string(respBytes))
+		return &APIError{Status: resp.StatusCode, Body: string(respBytes)}
 	}
 
 	if out != nil {

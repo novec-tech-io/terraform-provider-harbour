@@ -33,6 +33,9 @@ type fakeHarbour struct {
 	records map[string]*CertificateRecord
 	revoked []string // request_ids a revoke call actually succeeded on
 	gets    []string
+
+	renewCalls  []string // request_ids POST .../renew was called with
+	renewStatus int      // if non-zero, every renew call fails with this HTTP status
 }
 
 func newFakeHarbour(records ...*CertificateRecord) *fakeHarbour {
@@ -73,6 +76,34 @@ func (f *fakeHarbour) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			rec.Status = "revoked"
 			f.revoked = append(f.revoked, body.RequestID)
 			_, _ = w.Write([]byte(`{"status":"revoked"}`))
+		}
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/certificates/") &&
+		strings.HasSuffix(r.URL.Path, "/renew"):
+		id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/certificates/"), "/renew")
+		f.renewCalls = append(f.renewCalls, id)
+		if f.renewStatus != 0 {
+			w.WriteHeader(f.renewStatus)
+			_, _ = w.Write([]byte(`{"errors":["forced failure"]}`))
+			return
+		}
+		rec, ok := f.records[id]
+		switch {
+		case !ok:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"errors":["request not found"]}`))
+		case rec.Status != "issued":
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"errors":["certificate is ` + rec.Status + `; only an issued certificate can be renewed"]}`))
+		default:
+			next := *rec
+			next.RequestID = id + "-r"
+			next.SerialNumber = "serial-" + next.RequestID
+			next.Status = "issued"
+			next.RenewedToRequestID = ""
+			rec.Status = "superseded"
+			rec.RenewedToRequestID = next.RequestID
+			f.records[next.RequestID] = &next
+			_ = json.NewEncoder(w).Encode(RenewCertResponse{OldRequestID: id, NewRequestID: next.RequestID, Certificate: next})
 		}
 	default:
 		w.WriteHeader(http.StatusNotImplemented)

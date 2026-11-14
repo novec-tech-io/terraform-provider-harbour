@@ -255,6 +255,28 @@ resource "harbour_certificate" "api" {
 
 `allow_duplicate_cn = true` is required with `create_before_destroy`: for a moment both certificates are live under the same `common_name`, which Harbour's duplicate-common-name guard otherwise rejects with a 409. Changing `allow_duplicate_cn` itself never replaces the certificate.
 
+### Renewing a certificate on demand (Terraform 1.14+)
+
+Harbour renews certificates automatically inside their renewal window. To renew one **now** (ahead of a maintenance window, after a suspected key compromise, or to prove the mechanism works against your own setup), use the `harbour_certificate_renew` action:
+
+```hcl
+terraform {
+  required_version = ">= 1.14"
+}
+
+action "harbour_certificate_renew" "api" {
+  config {
+    request_id = harbour_certificate.api.request_id
+  }
+}
+```
+
+```bash
+terraform apply -invoke=action.harbour_certificate_renew.api
+```
+
+For an `export_to_acm` certificate the new material lands on the same ACM ARN, so nothing that references it changes. The `harbour_certificate` in state catches up on the next refresh (`terraform apply -refresh-only`, or any plan or apply). Actions require **Terraform 1.14 or later**, and a configuration containing an `action` block is rejected by older versions, so keep it in its own file or module. Everything else in this provider keeps working on older Terraform; there, force a renewal by calling `POST /certificates/{request_id}/renew` directly. See the [action's documentation](docs/actions/certificate_renew.md) for the limits and for what happens when a triggered renewal fails.
+
 ---
 
 ## ACM import
