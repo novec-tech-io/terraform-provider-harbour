@@ -51,6 +51,7 @@ type IssueCertRequest struct {
 	ExportToACM       bool     `json:"export_to_acm,omitempty"`
 	CSR               string   `json:"csr,omitempty"`
 	DeliveryAccountID string   `json:"delivery_account_id,omitempty"`
+	AllowDuplicateCN  bool     `json:"allow_duplicate_cn,omitempty"`
 }
 
 type IssueCertResponse struct {

@@ -18,7 +18,7 @@ terraform {
   required_providers {
     harbour = {
       source  = "novec-tech-io/harbour"
-      version = "~> 0.8"
+      version = "~> 0.9"
     }
   }
 }
@@ -235,6 +235,25 @@ resource "harbour_certificate" "prod" {
 The account must already be in your tenant's `delivery_account_ids` config (set via `PUT /config`, capped by your plan's delivery-account entitlement) and have the `harbour-managed-access` IAM role applied there — the same role setup described above, just in that account instead. Omit `delivery_account_id` and Harbour uses your tenant's `default_delivery_account_id` instead. A `delivery_account_id` that isn't registered is rejected with a 403 at issuance time — the provider surfaces this as a plain API error, no client-side validation.
 
 On renewal, Harbour derives the delivery account from the certificate's own `acm_certificate_arn` (an ACM ARN always embeds its account), not from `delivery_account_id` — so the certificate always re-lands in the same account it was originally exported to, even if your tenant's registered accounts change later.
+
+### Changing a certificate that a listener uses
+
+`ttl`, `common_name`, `alt_names` (and the other issuance arguments) can't be changed on a signed certificate, so changing one replaces it. Terraform's default replace order is destroy-then-create, which revokes the old certificate while your load balancer listener (or CloudFront distribution, etc.) still references it — the ACM delete then fails and is only retried later. To replace safely, issue the new certificate first and repoint the listener before the old one is removed:
+
+```hcl
+resource "harbour_certificate" "api" {
+  common_name        = "api.example.internal"
+  ttl                = "90d"
+  export_to_acm      = true
+  allow_duplicate_cn = true
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+```
+
+`allow_duplicate_cn = true` is required with `create_before_destroy`: for a moment both certificates are live under the same `common_name`, which Harbour's duplicate-common-name guard otherwise rejects with a 409. Changing `allow_duplicate_cn` itself never replaces the certificate.
 
 ---
 

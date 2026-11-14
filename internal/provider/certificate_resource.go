@@ -33,6 +33,7 @@ type CertificateResourceModel struct {
 	ExportToACM       types.Bool   `tfsdk:"export_to_acm"`
 	CSR               types.String `tfsdk:"csr"`
 	DeliveryAccountID types.String `tfsdk:"delivery_account_id"`
+	AllowDuplicateCN  types.Bool   `tfsdk:"allow_duplicate_cn"`
 	RequestID         types.String `tfsdk:"request_id"`
 	SerialNumber      types.String `tfsdk:"serial_number"`
 	SecretARN         types.String `tfsdk:"secret_arn"`
@@ -110,6 +111,10 @@ func (r *CertificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"allow_duplicate_cn": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Bypass the deployment's duplicate-common-name guard, which otherwise rejects (409) issuing a certificate while another live one exists for the same common_name. Set this to true when using lifecycle { create_before_destroy = true }, so the replacement can be issued before the old certificate is revoked. Only affects issuance; changing it does not replace the certificate.",
+			},
 			"request_id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -179,6 +184,7 @@ func (r *CertificateResource) Create(ctx context.Context, req resource.CreateReq
 		ExportToACM:       data.ExportToACM.ValueBool(),
 		CSR:               data.CSR.ValueString(),
 		DeliveryAccountID: data.DeliveryAccountID.ValueString(),
+		AllowDuplicateCN:  data.AllowDuplicateCN.ValueBool(),
 	}
 
 	if !data.AltNames.IsNull() && !data.AltNames.IsUnknown() {
@@ -228,8 +234,25 @@ func (r *CertificateResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *CertificateResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	// All arguments carry RequiresReplace — Update is never reached.
+func (r *CertificateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Only allow_duplicate_cn can change in place (it affects issuance only);
+	// every other argument carries RequiresReplace. Carry computed values over
+	// from prior state and persist the new flag.
+	var plan, state CertificateResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	plan.ID = state.ID
+	plan.RequestID = state.RequestID
+	plan.SerialNumber = state.SerialNumber
+	plan.SecretARN = state.SecretARN
+	plan.ExpiryTimestamp = state.ExpiryTimestamp
+	plan.Status = state.Status
+	plan.ACMCertificateARN = state.ACMCertificateARN
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *CertificateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
